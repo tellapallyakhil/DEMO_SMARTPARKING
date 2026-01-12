@@ -15,4 +15,16 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Initialize Parking Layout
+// Initialize Parking Layout
+const initializeLayout = require('./utils/initGraph');
+initializeLayout();
+
+// Routes
+const parkingRoutes = require('./routes/parking.routes');
+const rfidRoutes = require('./routes/rfid.routes');
+
+app.use('/api/parking', parkingRoutes);
+app.use('/api/rfid', rfidRoutes);
+
 module.exports = app;
