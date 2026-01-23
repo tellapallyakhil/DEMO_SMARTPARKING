@@ -1046,8 +1046,11 @@
 
 .progress-label {
     width: 80px;
+    min-width: 80px;
     font-size: 0.85rem;
-    color: var(--text-muted);
+    color: var(--text-secondary);
+    /* Brighter than muted */
+    flex-shrink: 0;
 }
 
 .progress-bar {
@@ -1078,10 +1081,24 @@
 
 .progress-value {
     width: 50px;
+    min-width: 50px;
     text-align: right;
     font-weight: 600;
     font-size: 0.85rem;
     color: var(--text-primary);
+    flex-shrink: 0;
+}
+
+/* No Data Chart */
+.no-data-chart {
+    padding: 2rem;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    font-style: italic;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 12px;
+    border: 1px dashed var(--glass-border);
 }
 
 /* No Data */
@@ -1197,4 +1214,126 @@
 
 .section-panel.history-panel {
     animation-delay: 0.4s;
+}
+
+/* ========================================
+   ADMIN CONTROLS SECTION (Below Parking Map)
+   ======================================== */
+.admin-controls-section {
+    margin-top: 1.5rem;
+    padding: 1.25rem;
+    background: rgba(15, 15, 26, 0.6);
+    border-radius: 16px;
+    border: 1px solid var(--glass-border);
+}
+
+.admin-controls-section h4 {
+    margin: 0 0 1rem 0;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--primary-light);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.admin-slots-grid.compact {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+    gap: 10px;
+}
+
+.admin-slot-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 12px 8px;
+    background: var(--bg-input);
+    border-radius: 10px;
+    border: 2px solid var(--glass-border);
+    transition: all 0.25s ease;
+}
+
+.admin-slot-card.free {
+    border-color: rgba(16, 185, 129, 0.4);
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.06), rgba(16, 185, 129, 0.02));
+}
+
+.admin-slot-card.occupied {
+    border-color: rgba(239, 68, 68, 0.4);
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.08), rgba(239, 68, 68, 0.02));
+}
+
+.admin-slot-card.booked {
+    border-color: rgba(245, 158, 11, 0.4);
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.08), rgba(245, 158, 11, 0.02));
+}
+
+.admin-slot-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+}
+
+.admin-slot-card:hover .slot-quick-actions {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.admin-slot-id {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+}
+
+.admin-slot-card.free .admin-slot-id {
+    color: var(--success-light);
+}
+
+.admin-slot-card.occupied .admin-slot-id {
+    color: var(--danger-light);
+}
+
+.admin-slot-card.booked .admin-slot-id {
+    color: var(--warning-light);
+}
+
+.admin-slot-status {
+    font-size: 1.2rem;
+}
+
+/* Responsive adjustments for admin controls */
+@media (max-width: 768px) {
+    .admin-controls-section {
+        padding: 1rem;
+    }
+
+    .admin-slots-grid.compact {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+    }
+
+    .admin-slot-card {
+        padding: 10px 6px;
+    }
+
+    .admin-slot-id {
+        font-size: 0.8rem;
+    }
+
+    .admin-slot-status {
+        font-size: 1rem;
+    }
+
+    .slot-quick-actions {
+        opacity: 1;
+        transform: none;
+    }
+
+    .quick-btn {
+        width: 24px;
+        height: 24px;
+        font-size: 0.65rem;
+    }
 }

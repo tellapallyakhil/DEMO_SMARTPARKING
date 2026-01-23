@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, Link } from 'react-router-dom';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from './firebase';
 import './App.css';
@@ -69,11 +69,11 @@ const BookingPage = () => {
           <h1>Smart Parking</h1>
         </div>
         <nav className="header-nav">
-          <a href="/" className="nav-link">📊 Dashboard</a>
-          <a href="/book" className="nav-link active">🎫 Book Now</a>
+          <Link to="/" className="nav-link">📊 Dashboard</Link>
+          <Link to="/book" className="nav-link active">🎫 Book Now</Link>
         </nav>
         <div className="header-actions">
-          <a href="/profile" className="profile-link">👤 My Profile</a>
+          <Link to="/profile" className="profile-link">👤 My Profile</Link>
           <button className="logout-btn" onClick={handleLogout}>🚪 Logout</button>
         </div>
       </header>

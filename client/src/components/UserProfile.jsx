@@ -12,15 +12,24 @@ const UserProfile = () => {
         totalBookings: 0,
         totalSpent: 0,
         activeBookings: 0,
-        completedBookings: 0
+        completedBookings: 0,
+        totalHours: 0
     });
 
-    // Mock Loyalty Data (To be integrated with backend later)
+    // Dynamic Loyalty Data
     const [loyalty, setLoyalty] = useState({
-        level: 'Gold Member',
-        points: 750,
-        nextLevelPoints: 1000,
-        progress: 75
+        level: 'Bronze Member',
+        points: 0,
+        nextLevelPoints: 500,
+        progress: 0
+    });
+
+    // Dynamic Achievements
+    const [achievements, setAchievements] = useState({
+        firstRide: false,
+        frequentFlyer: false, // 5+ bookings
+        bigSpender: false,   // > 500 spent
+        nightOwl: false      // Booking after 8 PM
     });
 
     const [settings, setSettings] = useState({
@@ -29,33 +38,72 @@ const UserProfile = () => {
         biometric: false
     });
 
+    const [historyFilter, setHistoryFilter] = useState('all');
+    const [isEditingVehicle, setIsEditingVehicle] = useState(false);
+    const [editVehicle, setEditVehicle] = useState({ type: '', number: '' });
+
     const navigate = useNavigate();
 
     useEffect(() => {
         const fetchUserData = async () => {
-            // In a real app we'd redirect if not logged in, but for dev we might allow viewing
-            if (!auth.currentUser) {
-                // navigate('/login');
-            }
+            if (!auth.currentUser) return; // Wait for auth
 
             try {
-                if (auth.currentUser) {
-                    const docRef = doc(db, "users", auth.currentUser.uid);
-                    const docSnap = await getDoc(docRef);
+                const docRef = doc(db, "users", auth.currentUser.uid);
+                const docSnap = await getDoc(docRef);
 
-                    if (docSnap.exists()) {
-                        const data = docSnap.data();
-                        setUserData(data);
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    setUserData(data);
 
-                        // Calculate stats from history
-                        const history = data.history || [];
-                        setStats({
-                            totalBookings: history.length,
-                            totalSpent: history.reduce((acc, b) => acc + (b.cost || 0), 0),
-                            activeBookings: history.filter(b => b.status === 'BOOKED' || b.status === 'OCCUPIED').length,
-                            completedBookings: history.filter(b => b.status === 'COMPLETED').length
-                        });
+                    // Calculate stats from history
+                    const history = data.history || [];
+                    const totalSpent = history.reduce((acc, b) => acc + (b.cost || 0), 0);
+                    const totalBookings = history.length;
+                    const totalHours = history.reduce((acc, b) => acc + (parseFloat(b.duration) || 1), 0);
+
+                    setStats({
+                        totalBookings,
+                        totalSpent,
+                        totalHours: Math.round(totalHours),
+                        activeBookings: history.filter(b => ['BOOKED', 'OCCUPIED', 'booked', 'occupied'].includes(b.status)).length,
+                        completedBookings: history.filter(b => ['COMPLETED', 'completed'].includes(b.status)).length
+                    });
+
+                    // Calculate Loyalty (10 points per booking + 1 point per ₹10 spent)
+                    const points = (totalBookings * 50) + Math.floor(totalSpent / 10);
+                    let level = 'Bronze Member';
+                    let nextLevelPoints = 500;
+
+                    if (points >= 1000) {
+                        level = 'Platinum Member';
+                        nextLevelPoints = 2500; // Arbitrary next goal
+                    } else if (points >= 500) {
+                        level = 'Gold Member';
+                        nextLevelPoints = 1000;
                     }
+
+                    const progress = Math.min(100, (points / nextLevelPoints) * 100);
+
+                    setLoyalty({
+                        level,
+                        points,
+                        nextLevelPoints,
+                        progress
+                    });
+
+                    // Calculate Achievements
+                    const hasNightBooking = history.some(b => {
+                        const date = new Date(b.date);
+                        return date.getHours() >= 20 || date.getHours() < 5;
+                    });
+
+                    setAchievements({
+                        firstRide: totalBookings > 0,
+                        frequentFlyer: totalBookings >= 5,
+                        bigSpender: totalSpent >= 500,
+                        nightOwl: hasNightBooking
+                    });
                 }
             } catch (error) {
                 console.error("Error fetching profile:", error);
@@ -97,8 +145,66 @@ const UserProfile = () => {
         }
     };
 
-    const toggleSetting = (setting) => {
-        setSettings(prev => ({ ...prev, [setting]: !prev[setting] }));
+    const toggleSetting = async (setting) => {
+        const newSettings = { ...settings, [setting]: !settings[setting] };
+        setSettings(newSettings);
+
+        // Save to Firebase
+        try {
+            if (auth.currentUser) {
+                const userRef = doc(db, "users", auth.currentUser.uid);
+                await updateDoc(userRef, { settings: newSettings });
+            }
+        } catch (error) {
+            console.error('Failed to save settings:', error);
+        }
+    };
+
+    const handleEditVehicle = () => {
+        setEditVehicle({
+            type: userData?.vehicleType || 'Car',
+            number: userData?.vehicleNumber || ''
+        });
+        setIsEditingVehicle(true);
+    };
+
+    const handleSaveVehicle = async () => {
+        if (!editVehicle.number.trim()) {
+            alert('Please enter a vehicle number');
+            return;
+        }
+
+        try {
+            const userRef = doc(db, "users", auth.currentUser.uid);
+            await updateDoc(userRef, {
+                vehicleType: editVehicle.type,
+                vehicleNumber: editVehicle.number.toUpperCase()
+            });
+            setUserData(prev => ({
+                ...prev,
+                vehicleType: editVehicle.type,
+                vehicleNumber: editVehicle.number.toUpperCase()
+            }));
+            setIsEditingVehicle(false);
+            alert('Vehicle updated successfully!');
+        } catch (error) {
+            console.error('Failed to update vehicle:', error);
+            alert('Failed to update vehicle');
+        }
+    };
+
+    const getFilteredHistory = () => {
+        if (!userData?.history) return [];
+        const history = [...userData.history].reverse();
+
+        switch (historyFilter) {
+            case 'active':
+                return history.filter(b => ['BOOKED', 'OCCUPIED'].includes(b.status?.toUpperCase()));
+            case 'completed':
+                return history.filter(b => b.status?.toUpperCase() === 'COMPLETED');
+            default:
+                return history;
+        }
     };
 
     if (loading) {
@@ -141,7 +247,7 @@ const UserProfile = () => {
                         <div className="profile-text">
                             <h1>{userData?.email || 'Guest User'}</h1>
                             <div className="badges-row">
-                                <span className="badge-pill gold">🏆 Gold Member</span>
+                                <span className={`badge-pill ${loyalty.level.includes('Gold') ? 'gold' : loyalty.level.includes('Platinum') ? 'platinum' : 'bronze'}`}>🏆 {loyalty.level}</span>
                                 <span className="badge-pill verified">✓ Verified</span>
                             </div>
                         </div>
@@ -198,7 +304,7 @@ const UserProfile = () => {
                             🕒
                         </div>
                         <div className="stat-content">
-                            <h3>124h</h3>
+                            <h3>{stats.totalHours}h</h3>
                             <p>Hours Parked</p>
                         </div>
                     </div>
@@ -211,7 +317,7 @@ const UserProfile = () => {
                         <div className="glass-card vehicle-card">
                             <div className="card-header-row">
                                 <h3>My Vehicle</h3>
-                                <button className="edit-btn">Edit</button>
+                                <button className="edit-btn" onClick={handleEditVehicle}>Edit</button>
                             </div>
                             <div className="vehicle-display">
                                 <span className="vehicle-large-icon">
@@ -231,16 +337,16 @@ const UserProfile = () => {
                                 <Link to="#" className="see-all">See All</Link>
                             </div>
                             <div className="achievements-grid">
-                                <div className="achievement-item unlocked" title="First Booking">
+                                <div className={`achievement-item ${achievements.firstRide ? 'unlocked' : 'locked'}`} title="First Ride: Complete your first booking">
                                     <span>🎈</span>
                                 </div>
-                                <div className="achievement-item unlocked" title="Reviewer">
+                                <div className={`achievement-item ${achievements.frequentFlyer ? 'unlocked' : 'locked'}`} title="Regular: 5+ bookings">
                                     <span>⭐</span>
                                 </div>
-                                <div className="achievement-item unlocked" title="Eco Warrior">
-                                    <span>🌱</span>
+                                <div className={`achievement-item ${achievements.bigSpender ? 'unlocked' : 'locked'}`} title="Big Spender: Spend ₹500+">
+                                    <span>💎</span>
                                 </div>
-                                <div className="achievement-item locked" title="Night Owl">
+                                <div className={`achievement-item ${achievements.nightOwl ? 'unlocked' : 'locked'}`} title="Night Owl: Book after 8 PM">
                                     <span>🦉</span>
                                 </div>
                             </div>
@@ -284,15 +390,24 @@ const UserProfile = () => {
                             <div className="card-header-row">
                                 <h3>Booking History</h3>
                                 <div className="filter-tabs">
-                                    <span className="active">All</span>
-                                    <span>Active</span>
-                                    <span>Completed</span>
+                                    <span
+                                        className={historyFilter === 'all' ? 'active' : ''}
+                                        onClick={() => setHistoryFilter('all')}
+                                    >All</span>
+                                    <span
+                                        className={historyFilter === 'active' ? 'active' : ''}
+                                        onClick={() => setHistoryFilter('active')}
+                                    >Active</span>
+                                    <span
+                                        className={historyFilter === 'completed' ? 'active' : ''}
+                                        onClick={() => setHistoryFilter('completed')}
+                                    >Completed</span>
                                 </div>
                             </div>
 
-                            {userData?.history && userData.history.length > 0 ? (
+                            {getFilteredHistory().length > 0 ? (
                                 <div className="enhanced-history-list">
-                                    {userData.history.slice(-10).reverse().map((booking, index) => (
+                                    {getFilteredHistory().slice(0, 10).map((booking, index) => (
                                         <div key={index} className={`enhanced-history-item ${booking.status?.toLowerCase()}`}>
                                             <div className="history-time-col">
                                                 <span className="history-date-day">
@@ -308,7 +423,7 @@ const UserProfile = () => {
                                                     <span className={`status-pill ${booking.status?.toLowerCase()}`}>{booking.status}</span>
                                                 </div>
                                                 <span className="history-time-detail">
-                                                    {new Date(booking.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • 2 hours
+                                                    {new Date(booking.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {booking.duration || 1} hour(s)
                                                 </span>
                                             </div>
                                             <div className="history-action-col">
@@ -339,6 +454,39 @@ const UserProfile = () => {
                     </div>
                 </div>
             </div>
+
+            {/* Edit Vehicle Modal */}
+            {isEditingVehicle && (
+                <div className="modal-overlay" onClick={() => setIsEditingVehicle(false)}>
+                    <div className="edit-modal" onClick={e => e.stopPropagation()}>
+                        <h3>Edit Vehicle</h3>
+                        <div className="modal-form">
+                            <label>Vehicle Type</label>
+                            <select
+                                value={editVehicle.type}
+                                onChange={e => setEditVehicle(prev => ({ ...prev, type: e.target.value }))}
+                            >
+                                <option value="Car">🚗 Car</option>
+                                <option value="Bike">🏍️ Bike</option>
+                                <option value="Truck">🚛 Truck</option>
+                            </select>
+
+                            <label>Vehicle Number</label>
+                            <input
+                                type="text"
+                                value={editVehicle.number}
+                                onChange={e => setEditVehicle(prev => ({ ...prev, number: e.target.value.toUpperCase() }))}
+                                placeholder="AP01XY1234"
+                            />
+
+                            <div className="modal-actions">
+                                <button className="cancel-btn" onClick={() => setIsEditingVehicle(false)}>Cancel</button>
+                                <button className="save-btn" onClick={handleSaveVehicle}>Save Changes</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

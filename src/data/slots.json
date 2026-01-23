@@ -1,0 +1,97 @@
+{
+  "S1": {
+    "id": "S1",
+    "status": "BOOKED",
+    "lastUpdated": "2026-01-23T15:49:30.820Z",
+    "expiredBooking": {
+      "vehicleType": "Car",
+      "vehicleNumber": "AP 88",
+      "duration": 1,
+      "originalDuration": 1,
+      "cost": 50,
+      "penaltyApplied": false,
+      "startTime": "2026-01-23T14:57",
+      "endTime": "2026-01-23T10:27:00.000Z",
+      "bookedAt": "2026-01-23T09:17:36.154Z",
+      "expiresAt": 1769164020000
+    },
+    "isBooked": true,
+    "bookingDetails": {
+      "vehicleType": "Bike",
+      "vehicleNumber": "AP 69",
+      "duration": 1,
+      "originalDuration": 1,
+      "cost": 50,
+      "penaltyApplied": false,
+      "startTime": "2026-01-23T21:29",
+      "endTime": "2026-01-23T16:59:00.000Z",
+      "bookedAt": "2026-01-23T15:49:30.820Z",
+      "expiresAt": 1769187540000
+    }
+  },
+  "S2": {
+    "id": "S2",
+    "status": "FREE",
+    "lastUpdated": "2026-01-23T15:39:22.685Z",
+    "expiredBooking": {
+      "vehicleType": "Car",
+      "vehicleNumber": "AP 55",
+      "duration": 2,
+      "originalDuration": 1.95,
+      "cost": 100,
+      "penaltyApplied": true,
+      "startTime": "2026-01-23T15:06",
+      "endTime": "2026-01-23T11:33:00.000Z",
+      "bookedAt": "2026-01-23T09:33:41.489Z",
+      "expiresAt": 1769167980000
+    },
+    "isBooked": false
+  },
+  "S3": {
+    "id": "S3",
+    "status": "FREE",
+    "lastUpdated": "2026-01-22T18:29:02.124Z"
+  },
+  "S4": {
+    "id": "S4",
+    "status": "FREE",
+    "lastUpdated": "2026-01-22T18:29:03.569Z"
+  },
+  "S5": {
+    "id": "S5",
+    "status": "FREE",
+    "lastUpdated": "2026-01-22T18:29:04.815Z"
+  },
+  "S6": {
+    "id": "S6",
+    "status": "FREE",
+    "lastUpdated": "2026-01-22T18:29:06.084Z",
+    "expiredBooking": {
+      "vehicleType": "Car",
+      "vehicleNumber": "AP 26",
+      "duration": 2,
+      "originalDuration": 1.97,
+      "cost": 100,
+      "penaltyApplied": true,
+      "startTime": "2026-01-19T14:08",
+      "endTime": "2026-01-19T10:36:00.000Z",
+      "bookedAt": "2026-01-19T08:36:34.997Z",
+      "expiresAt": 1768818960000
+    }
+  },
+  "S7": {
+    "id": "S7",
+    "status": "FREE",
+    "lastUpdated": "2026-01-22T18:29:07.719Z"
+  },
+  "S8": {
+    "id": "S8",
+    "status": "FREE",
+    "lastUpdated": "2026-01-22T18:29:08.954Z"
+  },
+  "S9": {
+    "id": "S9",
+    "status": "FREE",
+    "lastUpdated": "2026-01-22T18:29:10.034Z"
+  }
+}

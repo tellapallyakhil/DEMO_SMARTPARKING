@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, getDocs, query, orderBy, doc, updateDoc } from 'firebase/firestore';
+import { collection, getDocs, getDoc, query, orderBy, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import api from '../api';
+import ParkingMap from './ParkingMap';
 import './AdminDashboard.css';
 
 const AdminDashboard = () => {
@@ -69,13 +70,28 @@ const AdminDashboard = () => {
             const todayStr = new Date().toDateString();
             const weekAgo = new Date();
             weekAgo.setDate(weekAgo.getDate() - 7);
+            const now = new Date();
 
             const hourCounts = {};
             const slotCounts = {};
+            const expiredBookingsToUpdate = [];
 
-            querySnapshot.forEach((doc) => {
-                const data = doc.data();
-                historyData.push({ id: doc.id, ...data });
+            querySnapshot.forEach((docSnapshot) => {
+                const data = docSnapshot.data();
+
+                // Check if booking has expired (endTime passed but still marked BOOKED)
+                const endTime = data.endTime ? new Date(data.endTime) : null;
+                const status = (data.status || 'UNKNOWN').toUpperCase();
+                const isExpired = endTime && now > endTime && ['BOOKED', 'RESERVED', 'OCCUPIED'].includes(status);
+
+                if (isExpired) {
+                    // Mark for update
+                    expiredBookingsToUpdate.push({ id: docSnapshot.id, ...data });
+                    // Treat as completed for stats
+                    data.status = 'COMPLETED';
+                }
+
+                historyData.push({ id: docSnapshot.id, ...data, isExpired });
 
                 // Earnings
                 totalEarn += (data.cost || 0);
@@ -83,22 +99,71 @@ const AdminDashboard = () => {
                 if (bookingDate.toDateString() === todayStr) todayEarn += (data.cost || 0);
                 if (bookingDate >= weekAgo) weekEarn += (data.cost || 0);
 
-                // Status counts
-                if (data.status === 'BOOKED' || data.status === 'OCCUPIED') activeCount++;
-                else if (data.status === 'COMPLETED') completedCount++;
-                else if (data.status === 'CANCELLED') cancelledCount++;
+                // Status counts (Case Insensitive) - use potentially updated status
+                const currentStatus = (data.status || 'UNKNOWN').toUpperCase();
+
+                if (['BOOKED', 'OCCUPIED', 'RESERVED'].includes(currentStatus)) activeCount++;
+                else if (['COMPLETED', 'PAID', 'FINISHED'].includes(currentStatus)) completedCount++;
+                else if (['CANCELLED', 'CANCELED', 'VOID'].includes(currentStatus)) cancelledCount++;
+                else {
+                    console.warn(`Uncategorized status found: ${currentStatus}`);
+                }
 
                 // Hour distribution
                 const hour = bookingDate.getHours();
                 hourCounts[hour] = (hourCounts[hour] || 0) + 1;
 
                 // Slot utilization
-                slotCounts[data.slotId] = (slotCounts[data.slotId] || 0) + 1;
+                const slotId = data.slotId || 'Unknown';
+                slotCounts[slotId] = (slotCounts[slotId] || 0) + 1;
             });
+
+            // Auto-update expired bookings in Firebase
+            if (expiredBookingsToUpdate.length > 0) {
+                console.log(`[Admin] Auto-completing ${expiredBookingsToUpdate.length} expired booking(s)...`);
+                for (const booking of expiredBookingsToUpdate) {
+                    try {
+                        const bookingRef = doc(db, "bookings", booking.id);
+                        await updateDoc(bookingRef, {
+                            status: 'COMPLETED',
+                            autoCompleted: true,
+                            completedAt: new Date().toISOString()
+                        });
+
+                        // Sync with User's history
+                        if (booking.userId) {
+                            try {
+                                const userRef = doc(db, "users", booking.userId);
+                                const userSnap = await getDoc(userRef);
+                                if (userSnap.exists()) {
+                                    const userData = userSnap.data();
+                                    const history = userData.history || [];
+                                    const updatedHistory = history.map(h => {
+                                        // Match by slotId and rough time or just assume last booking for that slot?
+                                        // Better to match by equality of properties if ID is not in history
+                                        if (h.slotId === booking.slotId && h.date === booking.date) {
+                                            return { ...h, status: 'COMPLETED' };
+                                        }
+                                        return h;
+                                    });
+                                    await updateDoc(userRef, { history: updatedHistory });
+                                }
+                            } catch (uErr) {
+                                console.error(`Failed to sync user history for ${booking.userId}:`, uErr);
+                            }
+                        }
+
+                        console.log(`[Admin] Booking ${booking.id} (Slot ${booking.slotId}) auto-completed & User synced.`);
+                    } catch (err) {
+                        console.error(`Failed to auto-complete booking ${booking.id}:`, err);
+                    }
+                }
+            }
 
             // Find peak hour
             const peakHour = Object.keys(hourCounts).reduce((a, b) =>
-                hourCounts[a] > hourCounts[b] ? a : b, null);
+                hourCounts[a] > hourCounts[b] ? a : b, null
+            );
 
             setBookings(historyData);
             setStats({
@@ -109,8 +174,9 @@ const AdminDashboard = () => {
                 activeBookings: activeCount,
                 completedBookings: completedCount,
                 cancelledBookings: cancelledCount,
+                otherBookings: historyData.length - (activeCount + completedCount + cancelledCount),
                 peakHour: peakHour ? `${peakHour}:00` : 'N/A',
-                avgDuration: historyData.length > 0 ? (historyData.reduce((acc, b) => acc + (b.duration || 1), 0) / historyData.length).toFixed(1) : 0
+                avgDuration: historyData.length > 0 ? (historyData.reduce((acc, b) => acc + (parseFloat(b.duration) || 1), 0) / historyData.length).toFixed(1) : 0
             });
 
             setAnalytics({
@@ -275,67 +341,24 @@ const AdminDashboard = () => {
                     <div className="dashboard-content">
                         {/* Live Slots Panel - Enhanced Parking Map */}
                         <div className="section-panel live-panel">
-                            <div className="live-panel-header">
-                                <h2>🅿️ Live Parking Map</h2>
-                                <div className="live-badge">
-                                    <span className="pulse-dot"></span>
-                                    <span>LIVE</span>
-                                </div>
-                            </div>
+                            {/* Beautiful SVG Parking Map */}
+                            <ParkingMap slots={slots} onSlotClick={() => { }} />
 
-                            {/* Parking Legend - Prominent */}
-                            <div className="parking-legend">
-                                <div className="legend-item">
-                                    <span className="legend-dot free"></span>
-                                    <span className="legend-label">Available</span>
-                                    <span className="legend-count">{freeSlots}</span>
-                                </div>
-                                <div className="legend-item">
-                                    <span className="legend-dot booked"></span>
-                                    <span className="legend-label">Reserved</span>
-                                    <span className="legend-count">{Object.values(slots).filter(s => s.isBooked).length}</span>
-                                </div>
-                                <div className="legend-item">
-                                    <span className="legend-dot occupied"></span>
-                                    <span className="legend-label">In Use</span>
-                                    <span className="legend-count">{Object.values(slots).filter(s => s.status === 'OCCUPIED').length}</span>
-                                </div>
-                            </div>
-
-                            {/* Parking Map Visualization */}
-                            <div className="parking-map-container">
-                                <div className="parking-lane-marker">LANE A</div>
-                                <div className="admin-slots-grid">
+                            {/* Admin Quick Controls */}
+                            <div className="admin-controls-section">
+                                <h4>🎛️ Admin Slot Controls</h4>
+                                <div className="admin-slots-grid compact">
                                     {Object.values(slots).sort((a, b) => a.id.localeCompare(b.id)).map(slot => {
                                         const isOccupied = slot.status === 'OCCUPIED';
                                         const isBooked = slot.isBooked;
                                         const slotClass = isBooked ? 'booked' : slot.status.toLowerCase();
 
                                         return (
-                                            <div key={slot.id} className={`parking-slot ${slotClass}`}>
-                                                <div className="slot-content">
-                                                    <span className="slot-number">{slot.id}</span>
-                                                    {isOccupied && (
-                                                        <div className="car-icon">
-                                                            🚗
-                                                        </div>
-                                                    )}
-                                                    {isBooked && !isOccupied && (
-                                                        <div className="reserved-icon">
-                                                            📋
-                                                        </div>
-                                                    )}
-                                                    {!isOccupied && !isBooked && (
-                                                        <div className="available-icon">
-                                                            ✓
-                                                        </div>
-                                                    )}
-                                                    <span className="slot-label">
-                                                        {isBooked ? 'RESERVED' : slot.status}
-                                                    </span>
-                                                </div>
-
-                                                {/* Quick Action Buttons - Always Visible */}
+                                            <div key={slot.id} className={`admin-slot-card ${slotClass}`}>
+                                                <span className="admin-slot-id">{slot.id}</span>
+                                                <span className="admin-slot-status">
+                                                    {isOccupied ? '🚗' : isBooked ? '📋' : '✓'}
+                                                </span>
                                                 <div className="slot-quick-actions">
                                                     <button
                                                         onClick={() => updateStatus(slot.id, 'FREE', 'force')}
@@ -362,24 +385,6 @@ const AdminDashboard = () => {
                                             </div>
                                         );
                                     })}
-                                </div>
-                                <div className="parking-lane-marker">EXIT →</div>
-                            </div>
-
-                            {/* Occupancy Bar */}
-                            <div className="occupancy-bar-container">
-                                <div className="occupancy-info">
-                                    <span>Lot Capacity</span>
-                                    <span className="occupancy-percent">{occupancyRate}% Full</span>
-                                </div>
-                                <div className="occupancy-bar">
-                                    <div
-                                        className="occupancy-fill"
-                                        style={{
-                                            width: `${occupancyRate}%`,
-                                            background: occupancyRate > 80 ? '#ef4444' : occupancyRate > 50 ? '#f59e0b' : '#10b981'
-                                        }}
-                                    ></div>
                                 </div>
                             </div>
                         </div>
@@ -431,44 +436,86 @@ const AdminDashboard = () => {
                                 <table className="history-table">
                                     <thead>
                                         <tr>
-                                            <th>Date & Time</th>
+                                            <th>Booking Period</th>
                                             <th>User</th>
                                             <th>Vehicle</th>
                                             <th>Slot</th>
+                                            <th>Duration</th>
                                             <th>Amount</th>
                                             <th>Status</th>
+                                            <th>Expires</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {filteredBookings.slice(0, 15).map(b => (
-                                            <tr key={b.id}>
-                                                <td>
-                                                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                                        <span>{new Date(b.date).toLocaleDateString()}</span>
-                                                        <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
-                                                            {new Date(b.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        {filteredBookings.slice(0, 15).map(b => {
+                                            // Calculate expiration status
+                                            const endTime = b.endTime ? new Date(b.endTime) : null;
+                                            const now = new Date();
+                                            const isExpired = endTime && now > endTime;
+                                            const timeRemaining = endTime ? endTime - now : null;
+
+                                            // Format remaining time
+                                            let expiresText = '--';
+                                            if (b.status?.toUpperCase() === 'BOOKED' && endTime) {
+                                                if (isExpired) {
+                                                    expiresText = '⏰ Expired';
+                                                } else if (timeRemaining) {
+                                                    const hoursLeft = Math.floor(timeRemaining / (1000 * 60 * 60));
+                                                    const minsLeft = Math.floor((timeRemaining % (1000 * 60 * 60)) / (1000 * 60));
+                                                    expiresText = hoursLeft > 0 ? `${hoursLeft}h ${minsLeft}m` : `${minsLeft}m`;
+                                                }
+                                            } else if (b.status?.toUpperCase() === 'COMPLETED') {
+                                                expiresText = '✅ Done';
+                                            } else if (b.status?.toUpperCase() === 'CANCELLED') {
+                                                expiresText = '❌ Cancelled';
+                                            }
+
+                                            return (
+                                                <tr key={b.id}>
+                                                    <td>
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                                            <span style={{ fontSize: '0.85rem' }}>
+                                                                {b.startTime ? new Date(b.startTime).toLocaleDateString() : new Date(b.date).toLocaleDateString()}
+                                                            </span>
+                                                            <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
+                                                                {b.startTime ? new Date(b.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
+                                                                {' → '}
+                                                                {b.endTime ? new Date(b.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
+                                                            </span>
+                                                        </div>
+                                                    </td>
+                                                    <td style={{ maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '0.85rem' }}>
+                                                        {b.userEmail}
+                                                    </td>
+                                                    <td className="vehicle-badge">{b.vehicleNumber}</td>
+                                                    <td>
+                                                        <span style={{
+                                                            padding: '4px 12px',
+                                                            background: 'rgba(249, 115, 22, 0.15)',
+                                                            borderRadius: '6px',
+                                                            fontFamily: 'monospace',
+                                                            fontWeight: '600'
+                                                        }}>
+                                                            {b.slotId}
                                                         </span>
-                                                    </div>
-                                                </td>
-                                                <td style={{ maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                    {b.userEmail}
-                                                </td>
-                                                <td className="vehicle-badge">{b.vehicleNumber}</td>
-                                                <td>
-                                                    <span style={{
-                                                        padding: '4px 12px',
-                                                        background: 'rgba(249, 115, 22, 0.15)',
-                                                        borderRadius: '6px',
-                                                        fontFamily: 'monospace',
-                                                        fontWeight: '600'
-                                                    }}>
-                                                        {b.slotId}
-                                                    </span>
-                                                </td>
-                                                <td className="cost-cell">₹{b.cost}</td>
-                                                <td><span className={`status-pill ${b.status?.toLowerCase()}`}>{b.status}</span></td>
-                                            </tr>
-                                        ))}
+                                                    </td>
+                                                    <td style={{ fontSize: '0.85rem' }}>
+                                                        <span style={{ color: '#60a5fa' }}>{parseFloat(b.duration || 1).toFixed(1)}h</span>
+                                                    </td>
+                                                    <td className="cost-cell">₹{b.cost}</td>
+                                                    <td><span className={`status-pill ${b.status?.toLowerCase()}`}>{b.status}</span></td>
+                                                    <td>
+                                                        <span style={{
+                                                            fontSize: '0.8rem',
+                                                            color: isExpired ? '#f87171' : (b.status?.toUpperCase() === 'BOOKED' ? '#4ade80' : '#94a3b8'),
+                                                            fontWeight: isExpired ? '600' : '400'
+                                                        }}>
+                                                            {expiresText}
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
                                     </tbody>
                                 </table>
                                 {filteredBookings.length === 0 && (
@@ -509,36 +556,56 @@ const AdminDashboard = () => {
                         <div className="analytics-card">
                             <h4>📊 Booking Status Distribution</h4>
                             <div className="progress-bar-container">
-                                <div className="progress-item">
-                                    <span className="progress-label">Completed</span>
-                                    <div className="progress-bar">
-                                        <div
-                                            className="progress-fill success"
-                                            style={{ width: `${stats.totalBookings > 0 ? (stats.completedBookings / stats.totalBookings) * 100 : 0}%` }}
-                                        ></div>
+                                {stats.totalBookings > 0 ? (
+                                    <>
+                                        <div className="progress-item">
+                                            <span className="progress-label">Completed</span>
+                                            <div className="progress-bar">
+                                                <div
+                                                    className="progress-fill success"
+                                                    style={{ width: `${(stats.completedBookings / stats.totalBookings) * 100}%` }}
+                                                ></div>
+                                            </div>
+                                            <span className="progress-value">{stats.completedBookings}</span>
+                                        </div>
+                                        <div className="progress-item">
+                                            <span className="progress-label">Active</span>
+                                            <div className="progress-bar">
+                                                <div
+                                                    className="progress-fill warning"
+                                                    style={{ width: `${(stats.activeBookings / stats.totalBookings) * 100}%` }}
+                                                ></div>
+                                            </div>
+                                            <span className="progress-value">{stats.activeBookings}</span>
+                                        </div>
+                                        <div className="progress-item">
+                                            <span className="progress-label">Cancelled</span>
+                                            <div className="progress-bar">
+                                                <div
+                                                    className="progress-fill danger"
+                                                    style={{ width: `${(stats.cancelledBookings / stats.totalBookings) * 100}%` }}
+                                                ></div>
+                                            </div>
+                                            <span className="progress-value">{stats.cancelledBookings}</span>
+                                        </div>
+                                        {stats.otherBookings > 0 && (
+                                            <div className="progress-item">
+                                                <span className="progress-label">Other</span>
+                                                <div className="progress-bar">
+                                                    <div
+                                                        className="progress-fill"
+                                                        style={{ width: `${(stats.otherBookings / stats.totalBookings) * 100}%`, background: '#94a3b8' }}
+                                                    ></div>
+                                                </div>
+                                                <span className="progress-value">{stats.otherBookings}</span>
+                                            </div>
+                                        )}
+                                    </>
+                                ) : (
+                                    <div className="no-data-chart">
+                                        <p>No booking history available</p>
                                     </div>
-                                    <span className="progress-value">{stats.completedBookings}</span>
-                                </div>
-                                <div className="progress-item">
-                                    <span className="progress-label">Active</span>
-                                    <div className="progress-bar">
-                                        <div
-                                            className="progress-fill warning"
-                                            style={{ width: `${stats.totalBookings > 0 ? (stats.activeBookings / stats.totalBookings) * 100 : 0}%` }}
-                                        ></div>
-                                    </div>
-                                    <span className="progress-value">{stats.activeBookings}</span>
-                                </div>
-                                <div className="progress-item">
-                                    <span className="progress-label">Cancelled</span>
-                                    <div className="progress-bar">
-                                        <div
-                                            className="progress-fill danger"
-                                            style={{ width: `${stats.totalBookings > 0 ? (stats.cancelledBookings / stats.totalBookings) * 100 : 0}%` }}
-                                        ></div>
-                                    </div>
-                                    <span className="progress-value">{stats.cancelledBookings}</span>
-                                </div>
+                                )}
                             </div>
                         </div>
 

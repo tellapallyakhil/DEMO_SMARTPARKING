@@ -25,13 +25,30 @@ const Login = () => {
         }
 
         try {
-            await signInWithEmailAndPassword(auth, email, password);
+            const userCredential = await signInWithEmailAndPassword(auth, email, password);
+            const user = userCredential.user;
+
+            // Check if user is disabled/blocked
+            const { doc, getDoc } = await import('firebase/firestore');
+            const { db } = await import('../firebase');
+            const { signOut } = await import('firebase/auth');
+
+            const userRef = doc(db, "users", user.uid);
+            const userSnap = await getDoc(userRef);
+
+            if (userSnap.exists() && userSnap.data().disabled) {
+                await signOut(auth);
+                setError('🚫 Access Denied: Your account has been blocked by the administrator.');
+                setLoading(false);
+                return;
+            }
+
             navigate('/');
         } catch (err) {
             setError('Invalid credentials. Please check your email and password.');
             console.error(err);
         } finally {
-            setLoading(false);
+            if (!error) setLoading(false); // Only unset if no error set above
         }
     };
 

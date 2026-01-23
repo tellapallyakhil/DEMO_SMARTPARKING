@@ -8,6 +8,7 @@ import './UserDashboard.css';
 const UserDashboard = () => {
     const [userData, setUserData] = useState(null);
     const [bookings, setBookings] = useState([]);
+    const [historyFilter, setHistoryFilter] = useState('all');
     const [stats, setStats] = useState({
         totalBookings: 0,
         totalSpent: 0,
@@ -72,9 +73,9 @@ const UserDashboard = () => {
 
         const totalBookings = history.length;
         const totalSpent = history.reduce((acc, b) => acc + (b.cost || 0), 0);
-        const activeBookings = history.filter(b => b.status === 'BOOKED' || b.status === 'OCCUPIED').length;
-        const cancelledBookings = history.filter(b => b.status === 'CANCELLED').length;
-        const completedBookings = history.filter(b => b.status === 'COMPLETED').length;
+        const activeBookings = history.filter(b => ['BOOKED', 'OCCUPIED', 'booked', 'occupied', 'reserved'].includes(b.status)).length;
+        const cancelledBookings = history.filter(b => ['CANCELLED', 'cancelled'].includes(b.status)).length;
+        const completedBookings = history.filter(b => ['COMPLETED', 'completed'].includes(b.status)).length;
 
         // Calculate average duration (assuming duration in hours based on cost)
         const avgDuration = totalBookings > 0 ? (history.reduce((acc, b) => acc + (b.duration || 1), 0) / totalBookings).toFixed(1) : 0;
@@ -210,15 +211,17 @@ const UserDashboard = () => {
                     </Link>
                 </nav>
                 <div className="header-right">
-                    <div className="user-info">
-                        <div className="user-avatar">
-                            {userData?.email?.charAt(0).toUpperCase()}
+                    <Link to="/profile" className="user-info-link">
+                        <div className="user-info">
+                            <div className="user-avatar">
+                                {userData?.email?.charAt(0).toUpperCase()}
+                            </div>
+                            <div className="user-details">
+                                <span className="user-email">{userData?.email}</span>
+                                <span className="user-vehicle">{userData?.vehicleNumber}</span>
+                            </div>
                         </div>
-                        <div className="user-details">
-                            <span className="user-email">{userData?.email}</span>
-                            <span className="user-vehicle">{userData?.vehicleNumber}</span>
-                        </div>
-                    </div>
+                    </Link>
                     <button className="logout-btn" onClick={handleLogout}>
                         <span>🚪</span> Logout
                     </button>
@@ -426,7 +429,11 @@ const UserDashboard = () => {
                                     <h3>📜 Complete Booking History</h3>
                                     <div className="history-filters">
                                         <span className="filter-label">Filter:</span>
-                                        <select className="filter-select">
+                                        <select
+                                            className="filter-select"
+                                            value={historyFilter}
+                                            onChange={(e) => setHistoryFilter(e.target.value)}
+                                        >
                                             <option value="all">All Bookings</option>
                                             <option value="completed">Completed</option>
                                             <option value="active">Active</option>
@@ -447,7 +454,13 @@ const UserDashboard = () => {
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {bookings.map((booking, index) => (
+                                            {bookings.filter(b => {
+                                                if (historyFilter === 'all') return true;
+                                                if (historyFilter === 'active') return ['BOOKED', 'OCCUPIED'].includes(b.status?.toUpperCase());
+                                                if (historyFilter === 'completed') return b.status?.toUpperCase() === 'COMPLETED';
+                                                if (historyFilter === 'cancelled') return b.status?.toUpperCase() === 'CANCELLED';
+                                                return true;
+                                            }).map((booking, index) => (
                                                 <tr key={index} className={booking.status?.toLowerCase()}>
                                                     <td>
                                                         <div className="date-cell">
@@ -475,7 +488,10 @@ const UserDashboard = () => {
                                                             </button>
                                                         )}
                                                         {booking.status === 'COMPLETED' && (
-                                                            <button className="action-btn rebook">
+                                                            <button
+                                                                className="action-btn rebook"
+                                                                onClick={() => navigate('/book')}
+                                                            >
                                                                 Rebook
                                                             </button>
                                                         )}

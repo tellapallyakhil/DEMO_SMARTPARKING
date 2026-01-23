@@ -53,10 +53,17 @@ const updateSlotStatus = (req, res) => {
 
 const getSlots = (req, res) => {
     try {
+        // Check for expired bookings before returning slots
+        const expiredSlots = slotManager.checkExpiredBookings();
+        if (expiredSlots.length > 0) {
+            console.log(`[Parking] Auto-expired ${expiredSlots.length} booking(s):`, expiredSlots);
+        }
+
         const slots = slotManager.getSlots();
         res.status(200).json({
             success: true,
-            data: slots
+            data: slots,
+            expiredSlots: expiredSlots.length > 0 ? expiredSlots : undefined
         });
     } catch (error) {
         res.status(500).json({
@@ -96,7 +103,7 @@ const findParkingPath = (req, res) => {
 };
 
 const bookSlot = (req, res) => {
-    const { slotId, vehicleType, vehicleNumber, duration } = req.body;
+    const { slotId, vehicleType, vehicleNumber, duration, startTime, endTime } = req.body;
 
     if (!slotId || !vehicleType || !vehicleNumber || !duration) {
         return res.status(400).json({
@@ -134,7 +141,9 @@ const bookSlot = (req, res) => {
             duration: billedHours, // Store billed duration
             originalDuration: bookingDuration,
             cost,
-            penaltyApplied: isPenaltyApplied
+            penaltyApplied: isPenaltyApplied,
+            startTime: startTime || new Date().toISOString(), // Pass startTime for expiration tracking
+            endTime: endTime // Pass endTime for expiration tracking
         });
 
         if (bookingResult) {

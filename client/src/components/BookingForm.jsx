@@ -22,13 +22,21 @@ const BookingForm = ({ slotId, onClose, onSuccess }) => {
     const discountAmount = Math.round(basePrice * (discount / 100));
     const totalPrice = basePrice - discountAmount;
 
+    // Helper to format Date to "YYYY-MM-DDTHH:mm" in Local Time
+    const toLocalISOString = (date) => {
+        const tzOffset = date.getTimezoneOffset() * 60000; // offset in milliseconds
+        const localTime = new Date(date - tzOffset);
+        return localTime.toISOString().slice(0, 16);
+    };
+
     // Set default times (now + 10 min to now + 1 hour)
     useEffect(() => {
         const now = new Date();
         const start = new Date(now.getTime() + 10 * 60000);
         const end = new Date(now.getTime() + 70 * 60000);
-        setStartTime(start.toISOString().slice(0, 16));
-        setEndTime(end.toISOString().slice(0, 16));
+
+        setStartTime(toLocalISOString(start));
+        setEndTime(toLocalISOString(end));
     }, []);
 
     // Auto-calculate duration when times change
@@ -66,7 +74,16 @@ const BookingForm = ({ slotId, onClose, onSuccess }) => {
         setLoading(true);
         setError('');
 
-        if (duration <= 0) {
+        const start = new Date(startTime);
+        const end = new Date(endTime);
+        const now = new Date();
+
+        if (start < now) {
+            setLoading(false);
+            return setError("Start time cannot be in the past.");
+        }
+
+        if (end <= start) {
             setLoading(false);
             return setError("End time must be after start time.");
         }
@@ -83,35 +100,46 @@ const BookingForm = ({ slotId, onClose, onSuccess }) => {
 
             if (response.data.success) {
                 // If logged in, save to Firestore History & Global Bookings
-                if (auth.currentUser) {
-                    const bookingRecord = {
-                        slotId,
-                        vehicleType,
-                        vehicleNumber: vehicleNumber.toUpperCase(),
-                        date: new Date().toISOString(),
-                        startTime,
-                        endTime,
-                        cost: totalPrice,
-                        originalCost: basePrice,
-                        discount: discount,
-                        couponCode: couponCode || null,
-                        status: 'BOOKED',
-                        userId: auth.currentUser.uid,
-                        userEmail: auth.currentUser.email
-                    };
+                // Create Booking Record for Firestore
+                const currentUser = auth.currentUser;
+                const bookingRecord = {
+                    slotId,
+                    vehicleType,
+                    vehicleNumber: vehicleNumber.toUpperCase(),
+                    date: new Date().toISOString(),
+                    startTime,
+                    endTime,
+                    cost: totalPrice,
+                    originalCost: basePrice,
+                    discount: discount,
+                    couponCode: couponCode || null,
+                    status: 'BOOKED',
+                    userId: currentUser ? currentUser.uid : 'guest',
+                    userEmail: currentUser ? currentUser.email : 'Guest'
+                };
 
-                    // 1. User's private history
-                    const userRef = doc(db, "users", auth.currentUser.uid);
-                    await updateDoc(userRef, {
-                        history: arrayUnion(bookingRecord)
-                    }).catch(err => console.error("Failed to save history", err));
-
-                    // 2. Global Bookings Collection (For Admin Analytics)
+                // 1. Global Bookings Collection (For Admin Analytics) - ALWAYS SAVE
+                try {
                     const { addDoc, collection } = await import('firebase/firestore');
                     await addDoc(collection(db, "bookings"), {
                         ...bookingRecord,
                         createdAt: new Date().toISOString()
-                    }).catch(err => console.error("Failed to save global booking", err));
+                    });
+                } catch (err) {
+                    console.error("Failed to save global booking:", err);
+                }
+
+                // 2. User's Private History (If logged in)
+                if (currentUser) {
+                    try {
+                        const userRef = doc(db, "users", currentUser.uid);
+                        const { setDoc } = await import('firebase/firestore');
+                        await setDoc(userRef, {
+                            history: arrayUnion(bookingRecord)
+                        }, { merge: true });
+                    } catch (err) {
+                        console.error("Failed to save user history:", err);
+                    }
                 }
 
                 onSuccess();
@@ -257,8 +285,8 @@ const BookingForm = ({ slotId, onClose, onSuccess }) => {
                                         onClick={() => {
                                             const start = new Date();
                                             const end = new Date(start.getTime() + hours * 60 * 60 * 1000);
-                                            setStartTime(start.toISOString().slice(0, 16));
-                                            setEndTime(end.toISOString().slice(0, 16));
+                                            setStartTime(toLocalISOString(start));
+                                            setEndTime(toLocalISOString(end));
                                         }}
                                     >
                                         {hours}h
