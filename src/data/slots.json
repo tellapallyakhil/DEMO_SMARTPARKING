@@ -2,55 +2,92 @@
   "S1": {
     "id": "S1",
     "status": "BOOKED",
-    "lastUpdated": "2026-01-23T15:49:30.820Z",
+    "lastUpdated": "2026-02-13T09:16:26.231Z",
     "expiredBooking": {
       "vehicleType": "Car",
-      "vehicleNumber": "AP 88",
+      "vehicleNumber": "AP25 ",
       "duration": 1,
       "originalDuration": 1,
       "cost": 50,
       "penaltyApplied": false,
-      "startTime": "2026-01-23T14:57",
-      "endTime": "2026-01-23T10:27:00.000Z",
-      "bookedAt": "2026-01-23T09:17:36.154Z",
-      "expiresAt": 1769164020000
+      "startTime": "2026-02-13T10:27",
+      "endTime": "2026-02-13T05:57:00.000Z",
+      "bookedAt": "2026-02-13T04:47:21.522Z",
+      "expiresAt": 1770962220000
     },
     "isBooked": true,
     "bookingDetails": {
-      "vehicleType": "Bike",
-      "vehicleNumber": "AP 69",
+      "vehicleType": "Car",
+      "vehicleNumber": "F60B6A05",
       "duration": 1,
       "originalDuration": 1,
       "cost": 50,
       "penaltyApplied": false,
-      "startTime": "2026-01-23T21:29",
-      "endTime": "2026-01-23T16:59:00.000Z",
-      "bookedAt": "2026-01-23T15:49:30.820Z",
-      "expiresAt": 1769187540000
+      "startTime": "2026-02-13T14:56",
+      "endTime": "2026-02-13T10:26:00.000Z",
+      "bookedAt": "2026-02-13T09:16:26.231Z",
+      "expiresAt": 1770978360000
     }
   },
   "S2": {
     "id": "S2",
-    "status": "FREE",
-    "lastUpdated": "2026-01-23T15:39:22.685Z",
+    "status": "BOOKED",
+    "lastUpdated": "2026-02-13T10:00:46.437Z",
     "expiredBooking": {
       "vehicleType": "Car",
-      "vehicleNumber": "AP 55",
-      "duration": 2,
-      "originalDuration": 1.95,
-      "cost": 100,
-      "penaltyApplied": true,
-      "startTime": "2026-01-23T15:06",
-      "endTime": "2026-01-23T11:33:00.000Z",
-      "bookedAt": "2026-01-23T09:33:41.489Z",
-      "expiresAt": 1769167980000
+      "vehicleNumber": "AP 64",
+      "duration": 1,
+      "originalDuration": 1,
+      "cost": 50,
+      "penaltyApplied": false,
+      "startTime": "2026-01-30T15:18",
+      "endTime": "2026-01-30T10:48:00.000Z",
+      "bookedAt": "2026-01-30T09:39:12.987Z",
+      "expiresAt": 1769770080000
     },
-    "isBooked": false
+    "isBooked": true,
+    "bookingDetails": {
+      "vehicleType": "Car",
+      "vehicleNumber": "AP 25",
+      "duration": 1,
+      "originalDuration": 1,
+      "cost": 50,
+      "penaltyApplied": false,
+      "startTime": "2026-02-13T15:40",
+      "endTime": "2026-02-13T11:10:00.000Z",
+      "bookedAt": "2026-02-13T10:00:46.437Z",
+      "expiresAt": 1770981000000
+    }
   },
   "S3": {
     "id": "S3",
-    "status": "FREE",
-    "lastUpdated": "2026-01-22T18:29:02.124Z"
+    "status": "BOOKED",
+    "lastUpdated": "2026-02-13T10:01:27.627Z",
+    "expiredBooking": {
+      "vehicleType": "Car",
+      "vehicleNumber": "F60B6A05",
+      "duration": 1,
+      "originalDuration": 1,
+      "cost": 50,
+      "penaltyApplied": false,
+      "startTime": "2026-02-12T00:40",
+      "endTime": "2026-02-11T20:10:00.000Z",
+      "bookedAt": "2026-02-11T19:00:10.942Z",
+      "expiresAt": 1770840600000
+    },
+    "isBooked": true,
+    "bookingDetails": {
+      "vehicleType": "Car",
+      "vehicleNumber": "AP25",
+      "duration": 1,
+      "originalDuration": 1,
+      "cost": 50,
+      "penaltyApplied": false,
+      "startTime": "2026-02-13T15:41",
+      "endTime": "2026-02-13T11:11:00.000Z",
+      "bookedAt": "2026-02-13T10:01:27.627Z",
+      "expiresAt": 1770981060000
+    }
   },
   "S4": {
     "id": "S4",
@@ -60,7 +97,7 @@
   "S5": {
     "id": "S5",
     "status": "FREE",
-    "lastUpdated": "2026-01-22T18:29:04.815Z"
+    "lastUpdated": "2026-01-30T08:58:58.216Z"
   },
   "S6": {
     "id": "S6",
@@ -92,6 +129,6 @@
   "S9": {
     "id": "S9",
     "status": "FREE",
-    "lastUpdated": "2026-01-22T18:29:10.034Z"
+    "lastUpdated": "2026-01-30T08:59:03.336Z"
   }
 }

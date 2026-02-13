@@ -13,6 +13,11 @@ const authorizedVehicles = {
         owner: 'Admin',
         plate: 'ADM-0001',
         type: 'Staff'
+    },
+    'F60B6A05': {
+        owner: 'Smart User',
+        plate: 'F60B6A05',
+        type: 'General'
     }
 };
 

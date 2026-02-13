@@ -257,7 +257,7 @@ const ParkingMap = ({ slots, onSlotClick }) => {
                                                     fill="#fbbf24"
                                                     style={{ pointerEvents: 'none' }}
                                                 >
-                                                    ENTRY
+                                                    ENTRY/EXIT
                                                 </text>
                                             </>
                                         )}

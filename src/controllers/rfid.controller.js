@@ -13,7 +13,7 @@ const authenticateVehicle = (req, res) => {
         });
     }
 
-    // 1. Validate RFID
+    // 1. Validate RFID and get vehicle info
     const vehicle = authorizedVehicles[rfid];
 
     if (!vehicle) {
@@ -26,34 +26,60 @@ const authenticateVehicle = (req, res) => {
         });
     }
 
-    console.log(`Access Granted: ${vehicle.owner} (${vehicle.plate})`);
+    const vehiclePlate = vehicle.plate;
+    console.log(`Verifying vehicle: ${vehicle.owner} (${vehiclePlate})`);
 
-    // 2. Find Nearest Available Slot
-    const slots = slotManager.getAllSlots();
-    const startNode = 'ENTRANCE';
-    const allocation = findNearestSlot(parkingGraph, slots, startNode);
+    // 2. Check if this vehicle has an active booking
+    const allSlots = slotManager.getAllSlots();
+    const existingBooking = allSlots.find(slot =>
+        slot.status === 'BOOKED' &&
+        slot.bookingDetails &&
+        slot.bookingDetails.vehicleNumber === vehiclePlate
+    );
+
+    let allocation = null;
+
+    if (existingBooking) {
+        console.log(`[RFID] Active booking found for ${vehiclePlate} at slot ${existingBooking.id}`);
+
+        // Use the pre-booked slot
+        // Calculate path to the specific booked slot
+        const startNode = 'ENTRANCE';
+        const { dijkstra, buildPath } = require('../algorithms/dijkstra');
+        const { distances, previous } = dijkstra(parkingGraph.adjacencyList, startNode);
+        const path = buildPath(previous, existingBooking.id);
+
+        allocation = {
+            slotId: existingBooking.id,
+            distance: distances[existingBooking.id],
+            path: path,
+            isPreBooked: true
+        };
+
+        // Optionally update status to 'RESERVED' or handle transitions
+        // For now, keep it 'BOOKED' until they actually park (detected by IR sensor)
+    } else {
+        // 3. If no booking, find Nearest Available Slot (Standard Entry)
+        console.log(`[RFID] No booking found for ${vehiclePlate}. Assigning nearest available.`);
+        const startNode = 'ENTRANCE';
+        allocation = findNearestSlot(parkingGraph, slotManager.getSlots(), startNode);
+    }
 
     if (!allocation) {
         return res.status(200).json({
             success: true,
             authorized: true,
             message: 'Welcome, but Parking Full!',
-            command: 'DENY_FULL', // Or allow entry to wait? Usually deny if full.
+            command: 'DENY_FULL',
             vehicle: vehicle
         });
     }
 
-    // 3. Mark Slot as RESERVED (Optional refinement, but good for real systems)
-    // For now, we assume user drives to it. 
-    // If we want to be strict, we could mark it 'RESERVED' here.
-    // For this level of complexity, let's just return the path.
-
-    // We can also return the command to OPEN the gate here.
-
+    // 4. Send command to ESP32 to open the gate
     res.status(200).json({
         success: true,
         authorized: true,
-        message: 'Access Granted',
+        message: existingBooking ? 'Welcome! Drive to your booked slot.' : 'Access Granted. Proceed to assigned slot.',
         command: 'OPEN_GATE',
         vehicle: vehicle,
         allocation: allocation
